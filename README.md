@@ -4,6 +4,7 @@
 
 # Smart Task Manager API
 
+
 ![Python](https://img.shields.io/badge/Python-3.12-blue)
 ![FastAPI](https://img.shields.io/badge/FastAPI-Backend-green)
 ![Tests](https://img.shields.io/badge/Tests-Pytest-informational)
