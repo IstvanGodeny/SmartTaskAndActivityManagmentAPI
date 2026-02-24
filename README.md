@@ -67,7 +67,7 @@ Includes:
 
 ```bash
 git clone "https://github.com/IstvanGodeny/SmartTaskAndActivityManagmentAPI.git"
-cd smart-task-manager
+cd SmartTaskAndActivityManagmentAPI
 poetry install
 ```
 Create your environment file:
