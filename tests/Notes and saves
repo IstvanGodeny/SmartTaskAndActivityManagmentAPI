@@ -1,0 +1,78 @@
+# User isolation and ownership test without parameters
+def test_user_isolation(client, user_a, user_b):
+    task_a = create_task_helper(client, headers=user_a["headers"], payload_override={"title":"A task"})
+    task_b = create_task_helper(client, headers=user_b["headers"], payload_override={"title":"B task"})
+
+    # Test - User B cannot see User A's tasks
+    response_a = client.get("/api/v1/tasks/",
+                            headers=user_a["headers"])
+
+    response_b = client.get("/api/v1/tasks/",
+                            headers=user_b["headers"])
+    assert response_a.status_code == response_b.status_code == 200  # Check for success request for both users
+    assert len(response_a.json()) == len(response_b.json()) == 1    # Check for tasks for both users
+
+    ids = {t["id"] for t in response_a.json()}
+    assert task_a["id"] in ids
+    assert task_b["id"] not in ids
+
+    # Ownership tests
+    # Test - User B cannot see User A's task by ID
+    response_b_get_a_task = client.get(f"/api/v1/tasks/{task_a['id']}",
+                                       headers=user_b["headers"])
+    assert response_b_get_a_task.status_code == 404
+    assert response_b_get_a_task.json()["detail"] == "Task not found"
+
+    # Test - User B cannot update User A's task by ID
+    response_b_update_a_task = client.patch(f"/api/v1/tasks/{task_a['id']}",
+                                            headers=user_b["headers"],
+                                            json={"is_done":True})
+    assert response_b_update_a_task.status_code == 404
+    assert response_b_update_a_task.json()["detail"] == "Task not found"
+
+    # Test - User B cannot delete User A's task by ID
+    response_b_delete_a_task = client.delete(f"/api/v1/tasks/{task_a['id']}",
+                                          headers=user_b["headers"])
+    assert response_b_delete_a_task.status_code == 404
+    assert response_b_delete_a_task.json()["detail"] == "Task not found"
+
+
+# Auth test without parameters
+def test_auth_requires(client, user_a):
+    # Task for test
+    task = create_task_helper(client, headers=user_a["headers"], payload_override={"title":"A task"})
+
+    # Test for POST - create_task
+    response_post = client.post("/api/v1/tasks/",
+                                headers={},
+                                json={"title": "A task"})
+    assert response_post.status_code == 401
+    assert response_post.json().get("detail") == "Not authenticated"
+    # Test for GET - read_tasks
+    response_get_tasks = client.get("/api/v1/tasks/",
+                            headers={})
+    assert response_get_tasks.status_code == 401
+    assert response_get_tasks.json().get("detail") == "Not authenticated"
+    # Test for GET by ID - read_a_task
+    response_get_a_task = client.get(f"/api/v1/tasks/{task['id']}",
+                              headers={})
+    assert response_get_a_task.status_code == 401
+    assert response_get_a_task.json().get("detail") == "Not authenticated"
+    # Test for UPDATE - update_task
+    response_patch = client.patch(f"/api/v1/tasks/{task['id']}",
+                                headers={},
+                                json={"is_done": True})
+    assert response_patch.status_code == 401
+    assert response_patch.json().get("detail") == "Not authenticated"
+    # Test for Delete - delete_task
+    response = client.delete(f"/api/v1/tasks/{task['id']}",
+                             headers={})
+    assert response.status_code == 401
+    assert response.json().get("detail") == "Not authenticated"
+
+
+
+Next logical step for the project: ownership tests for update/delete returning 404 are already covered, so you can move on to either:
+	•	adding validation edge cases (e.g., missing title → 422), or
+	•	improving the API behavior (e.g., consistent response bodies / 204 empty), or
+	•	refactoring shared auth/user helpers into conftest.py (optional). - DONE

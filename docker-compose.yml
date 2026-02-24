@@ -1,0 +1,15 @@
+services:
+  db:
+    image: postgres:16
+    container_name: smart_task_db
+    environment:
+      POSTGRES_USER: stm_user
+      POSTGRES_PASSWORD: stm_password
+      POSTGRES_DB: stm_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - stm_pgdata:/var/lib/postgresql/data
+
+volumes:
+  stm_pgdata:
