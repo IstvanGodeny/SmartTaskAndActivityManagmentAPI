@@ -37,7 +37,7 @@ This project is part of my backend portfolio, built with production-ready struct
 - Protected endpoints
 - Task CRUD operations
 - Task ownership validation
-- Filtering & query parameters
+- Designed filtering and pagination endpoints & query parameters
 - Database migrations with Alembic
 - Isolated test database
 - Automated tests with Pytest

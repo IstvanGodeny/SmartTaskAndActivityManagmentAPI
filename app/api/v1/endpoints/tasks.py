@@ -1,12 +1,12 @@
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
 from app.api.deps import get_db, get_current_user
 from app.models.task import Task
 from app.models.user import User
-from app.schemas.task import TaskCreate, TaskOut, TaskUpdate
+from app.schemas.task import TaskCreate, TaskOut, TaskUpdate, ListingTasks
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
@@ -33,14 +33,16 @@ def create_task(
     return task_data
 
 
-@router.get("/", response_model=list[TaskOut], status_code=status.HTTP_200_OK)
+@router.get("/", response_model=ListingTasks, status_code=status.HTTP_200_OK)
 def read_tasks(
         current_user: User = Depends(get_current_user),
         db: Session = Depends(get_db),
         is_done: bool | None = None,
         due_before: datetime | None = None,
         due_after: datetime | None = None,
-) -> list[TaskOut]:
+        offset: int = Query(0, ge=0),
+        limit: int = Query(20, ge=1, le=100),
+) -> ListingTasks:
     tasks =db.query(Task).filter(Task.user_id == current_user.id)
 
     if is_done is not None:
@@ -58,9 +60,16 @@ def read_tasks(
     if due_after is not None:
         tasks = tasks.filter(Task.due_at >= due_after)
 
-    tasks = tasks.order_by(Task.due_at.desc()).all()
+    total = tasks.count()
+    items = tasks.order_by(Task.due_at.desc(), Task.id.desc()).offset(offset).limit(limit).all()
 
-    return tasks
+    return ListingTasks(
+        items=items,
+        total=total,
+        offset=offset,
+        limit=limit,
+        has_more=True if total > offset + limit else False,
+    )
 
 
 @router.get("/{task_id}", response_model=TaskOut, status_code=status.HTTP_200_OK)

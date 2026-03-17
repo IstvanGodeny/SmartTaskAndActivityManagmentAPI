@@ -1,3 +1,4 @@
+from time import process_time_ns
 from urllib import response
 
 import pytest
@@ -17,9 +18,10 @@ def test_user_isolation(client, user_a, user_b):
     response_b = client.get("/api/v1/tasks/",
                             headers=user_b["headers"])
     assert response_a.status_code == response_b.status_code == 200  # Check for success request for both users
-    assert len(response_a.json()) == len(response_b.json()) == 1    # Check for tasks for both users
 
-    ids = {t["id"] for t in response_a.json()}
+    assert len(response_a.json()["items"]) == len(response_b.json()["items"]) == 1    # Check for tasks for both users
+
+    ids = {t["id"] for t in response_a.json()["items"]}
     assert task_a["id"] in ids
     assert task_b["id"] not in ids
 
@@ -73,7 +75,7 @@ def test_positive(client, user_a):
     response_get_tasks = client.get("/api/v1/tasks/",
                               headers=user_a["headers"])
     assert response_get_tasks.status_code == 200
-    assert type(response_get_tasks.json()) == list
+    assert type(response_get_tasks.json()["items"]) == list
 
     # User A can get own task by ID (dictionary)
     response_get_a_task = client.get(f"/api/v1/tasks/{task['id']}",
@@ -96,7 +98,7 @@ def test_positive(client, user_a):
 
 # Filtering
 def test_task_filtering(client, user_a):
-    task1 = create_task_helper(
+    create_task_helper(
         client,
         headers=user_a["headers"],
         payload_override={
@@ -106,7 +108,7 @@ def test_task_filtering(client, user_a):
         }
     )
 
-    task2 = create_task_helper(
+    create_task_helper(
         client,
         headers=user_a["headers"],
         payload_override={
@@ -116,7 +118,7 @@ def test_task_filtering(client, user_a):
         }
     )
 
-    task3 = create_task_helper(
+    create_task_helper(
         client,
         headers=user_a["headers"],
         payload_override={
@@ -148,7 +150,83 @@ def test_task_filtering(client, user_a):
         )
         assert response.status_code == expected_status
         if response.status_code == 200:
-            titles = {t["title"] for t in response.json()}
+            titles = {t["title"] for t in response.json()["items"]}
             assert titles == expected_result
         elif response.status_code == 422:
             assert response.json()["detail"] == expected_result
+
+def test_pagination(client, user_a):
+    for i in range(25):
+        if i % 3 == 0:
+            create_task_helper(
+                client,
+                headers=user_a["headers"],
+                payload_override={
+                    "title": f"Task{i}",
+                    "is_done": False,
+                    "due_at": "2026-03-01T10:00:00",
+                }
+            )
+        elif i % 2 == 0:
+            create_task_helper(
+                client,
+                headers=user_a["headers"],
+                payload_override={
+                    "title": f"Task{i}",
+                    "is_done": True,
+                    "due_at": "2026-03-03T10:00:00",
+                }
+            )
+        else:
+            create_task_helper(
+                client,
+                headers=user_a["headers"],
+                payload_override={
+                    "title": f"Task{i}",
+                    "is_done": True,
+                    "due_at": None,
+                }
+            )
+
+    cases = [
+        ({"offset": 0, "limit": 20}, 200, {"items_length": 20, "total": 25, "offset": 0, "limit": 20}),
+        ({"offset": 20, "limit": 20}, 200, {"items_length": 5, "total": 25, "offset": 20, "limit": 20}),
+        ({"offset": -1, "limit": 20}, 422, None),
+        ({"offset": 0, "limit": 0}, 422, None),
+        ({"offset": 20, "limit": 101}, 422, None),
+        ({"is_done": False, "limit": 5}, 200, {"items_length": 5, "total": 9, "offset": 0, "limit": 5}),
+        ({"is_done": True, "offset": 10, "limit": 10}, 200, {"items_length": 6, "total": 16, "offset": 10, "limit": 10}),
+    ]
+
+    for params, expected_status, expected_result in cases:
+        response = client.get(
+            "/api/v1/tasks/",
+            headers=user_a["headers"],
+            params=params
+        )
+
+        assert response.status_code == expected_status
+
+        if expected_status != 200:
+            continue
+
+        data = response.json()
+
+        if response.status_code == 200:
+            items_length = len(data["items"])
+            total_items = data["total"]
+            offset = data["offset"]
+            limit = data["limit"]
+
+            assert items_length == expected_result["items_length"]
+            assert total_items == expected_result["total"]
+            assert offset == expected_result["offset"]
+            assert limit == expected_result["limit"]
+            assert data["has_more"] == ((data["offset"] + data["limit"]) < data["total"])
+
+            if "is_done" in params:
+                if params["is_done"]:
+                    assert all(item["is_done"] is True for item in data["items"])
+
+                if not params["is_done"]:
+                    assert all(item["is_done"] is False for item in data["items"])

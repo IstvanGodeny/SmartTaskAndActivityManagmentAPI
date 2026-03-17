@@ -26,3 +26,11 @@ class TaskOut(BaseModel):
     due_at: datetime | None
     created_at: datetime
     updated_at: datetime
+
+class ListingTasks(BaseModel):
+    items: list[TaskOut]
+    total: int
+    offset: int
+    limit: int
+    has_more: bool
+
